@@ -91,7 +91,7 @@ defmodule Esbuild do
   def bin_path do
     local_path = Path.join(Path.dirname(Mix.Project.build_path()), "esbuild")
 
-    case {File.exists?(local_path), check_global_esbuild_usable(:os.type())} do
+    case {File.exists?(local_path), check_global_esbuild_usable()} do
       {false, {true, path}} -> {:path, path}
       _ -> {:local, local_path}
     end
@@ -188,7 +188,7 @@ defmodule Esbuild do
 
   # Checks if esbuild is available on PATH
   # TODO: add support for win32 systems
-  defp check_global_esbuild_usable(os) when elem(os, 0) != :win32 do
+  defp check_global_esbuild_usable() do
     case get_esbuild_path(:os.type()) do
       {path, 0} ->
         clean_path = String.trim(path)
