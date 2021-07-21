@@ -84,10 +84,17 @@ defmodule Esbuild do
   @doc """
   Returns the path to the executable.
 
-  The executable may not be available if it was not yet installed.
+  It checks if a global version of esbuild is available. If it is and there's no local version installed, the library will return the path to the global one.
+
+  The executable may not be available if it was not yet installed locally and there's no global installed version.
   """
   def bin_path do
-    Path.join(Path.dirname(Mix.Project.build_path()), "esbuild")
+    local_path = Path.join(Path.dirname(Mix.Project.build_path()), "esbuild")
+
+    case {File.exists?(local_path), check_global_esbuild_usable(:os.type())} do
+      {false, {true, path}} -> {:path, path}
+      _ -> {:local, local_path}
+    end
   end
 
   @doc """
@@ -97,7 +104,7 @@ defmodule Esbuild do
   is not available.
   """
   def bin_version do
-    path = bin_path()
+    {_, path} = bin_path()
 
     with true <- File.exists?(path),
          {result, 0} <- System.cmd(path, ["--version"]) do
@@ -126,6 +133,7 @@ defmodule Esbuild do
     ]
 
     bin_path()
+    |> Kernel.elem(1)
     |> System.cmd(args ++ extra_args, opts)
     |> elem(1)
   end
@@ -136,7 +144,7 @@ defmodule Esbuild do
   Returns the same as `run/2`.
   """
   def install_and_run(profile, args) do
-    bin_path = Esbuild.bin_path()
+    {_, bin_path} = Esbuild.bin_path()
 
     unless File.exists?(bin_path) do
       install()
@@ -163,7 +171,7 @@ defmodule Esbuild do
       other -> raise "couldn't unpack archive: #{inspect(other)}"
     end
 
-    bin_path = Esbuild.bin_path()
+    {:local, bin_path} = Esbuild.bin_path()
 
     case :os.type() do
       {:win32, _} ->
@@ -171,6 +179,31 @@ defmodule Esbuild do
 
       _ ->
         File.cp!(Path.join([tmp_dir, "package", "bin", "esbuild"]), bin_path)
+    end
+  end
+
+  # Checks for esbuild on PATH
+  defp get_esbuild_path({os, _}) when os == :win32, do: System.cmd("where.exe", ["esbuild.exe"])
+  defp get_esbuild_path(_), do: System.cmd("which", ["esbuild"])
+
+  # Checks if esbuild is available on PATH
+  # TODO: add support for win32 systems
+  defp check_global_esbuild_usable(os) when elem(os, 0) != :win32 do
+    case get_esbuild_path(:os.type()) do
+      {path, 0} ->
+        clean_path = String.trim(path)
+        {global_esbuild_compatible(clean_path), clean_path}
+
+      _ ->
+        {false, nil}
+    end
+  end
+
+  # Checks if the global version of esbuild has the same version as Esbuild.compatible_version/0
+  defp global_esbuild_compatible(path) do
+    case System.cmd(path, ["--version"]) do
+      {v, 0} -> configured_version() == String.trim(v)
+      _ -> false
     end
   end
 

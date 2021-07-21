@@ -23,7 +23,7 @@ defmodule Mix.Tasks.Esbuild.Install do
   def run(args) do
     case OptionParser.parse_head!(args, strict: [if_missing: :boolean]) do
       {opts, []} ->
-        if opts[:if_missing] && File.exists?(Esbuild.bin_path()) do
+        if opts[:if_missing] && File.exists?(Esbuild.bin_path() |> Kernel.elem(1)) do
           :ok
         else
           if Code.ensure_loaded?(Mix.Tasks.App.Config) do
